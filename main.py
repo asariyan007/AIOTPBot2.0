@@ -54,6 +54,7 @@ def fetch_data_from_api():
         return []
 
 def extract_code(code):
+    # Match 4–8 digit number OR 3-3/4-4 hyphenated code
     match = re.search(r'\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b', code)
     if match:
         return match.group(1).replace("-", "")
@@ -71,7 +72,7 @@ def main():
         return
 
     for entry in data:
-        time = entry.get("Date", "")
+        time = entry.get("Date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         number = entry.get("Number", "")
         platform = entry.get("Platform", "")
         code = entry.get("OTP", "")
@@ -101,7 +102,7 @@ def main():
             f"*⏰ Time:* {time}\n"
             f"*📱 Number:* {number}\n"
             f"*💬 App:* {platform}\n"
-            f"*🔐 Code:*\n\n{code}\n"
+            f"*🔐 Code:*\n\n{code_id}\n"
             "*✅ Stay alert! More codes incoming...*"
         )
         send_message(CHAT_ID, message, BOT_TOKEN)
