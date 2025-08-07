@@ -11,7 +11,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 # ----------- CONFIG -------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID"))
-API_URL = os.getenv("API_URLS")  # Only one URL now
+API_URL = os.getenv("API_URLS")
 
 # ----------- BOT & DISPATCHER -------------
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
@@ -35,7 +35,7 @@ def get_status() -> str:
     return cur.fetchone()[0]
 
 def add_group(group_id: int):
-    cur.execute("INSERT OR IGNORE INTO groups (group_id, credit) VALUES (?, 'TEAM ELITE X')", (group_id,))
+    cur.execute("INSERT OR IGNORE INTO groups (group_id, credit) VALUES (?, '𝙎𝙖𝙡𝙚𝙨 𝙎𝙩𝙤𝙧𝙢 🌍')", (group_id,))
     conn.commit()
 
 def rmv_group(group_id: int):
@@ -53,7 +53,7 @@ def get_groups():
 def get_credit(group_id: int) -> str:
     cur.execute("SELECT credit FROM groups WHERE group_id = ?", (group_id,))
     r = cur.fetchone()
-    return r[0] if r else "TEAM ELITE X"
+    return r[0] if r else "𝙎𝙖𝙡𝙚𝙨 𝙎𝙩𝙤𝙧𝙢 🌍"
 
 # ----------- OTP CACHE -------------
 sent_hashes = set()
@@ -67,8 +67,8 @@ def is_unique(otp: str) -> bool:
 # ----------- BUTTONS -------------
 def otp_buttons():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Main Channel", url="https://t.me/TEAM_ELITE_X")],
-        [InlineKeyboardButton(text="Numbers File", url="https://t.me/TEAM_ELITE_X")]
+        [InlineKeyboardButton(text="Main Channel", url="https://t.me/+cbH_C9D9Rog4NWE1")],
+        [InlineKeyboardButton(text="Numbers File", url="https://t.me/+cbH_C9D9Rog4NWE1")]
     ])
 
 # ----------- OTP FETCH & SEND LOOP -------------
@@ -155,7 +155,11 @@ async def cmd_cngcredit(msg: Message):
 
 # ----------- MAIN STARTUP -------------
 async def main():
-    await dp.start_polling(bot, on_startup=fetch_and_send)
+    # Start OTP loop
+    asyncio.create_task(fetch_and_send())
+
+    # Start polling
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     asyncio.run(main())
