@@ -99,10 +99,12 @@ def main():
 
         message = (
             "*🔑 New Code Received*\n\n"
-            f"*⏰ Time:* {time}\n"
-            f"*📱 Number:* {number}\n"
-            f"*💬 App:* {platform}\n"
-            f"*🔐 Code:*\n\n{code_id}\n"
+            f"*⏰ Time:* {time}  \n"
+            f"*📱 Number:* {number}  \n"
+            f"*💬 App:* {platform}  \n"
+            f"*🔐 Code:* {code_id}  \n"
+            f"*📩 Full Message:*\n"
+            f"```\n{code}\n```\n"
             "*✅ Stay alert! More codes incoming...*"
         )
         send_message(CHAT_ID, message, BOT_TOKEN)
