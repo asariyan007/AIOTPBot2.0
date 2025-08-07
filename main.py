@@ -1,165 +1,116 @@
-import asyncio
-import hashlib
-import logging
-import sqlite3
-import httpx
 import os
-from aiogram import Bot, Dispatcher, F
-from aiogram.enums import ParseMode
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+import json
+import hashlib
+import re
+import requests
+from datetime import datetime
+from time import sleep
 
-# ----------- CONFIG -------------
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = int(os.getenv("OWNER_ID"))
-API_URL = os.getenv("API_URLS")
+# ========== Configuration ==========
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78")
+CHAT_ID = os.getenv("CHAT_ID", "-1002616614576")
+API_URL = "https://techflare.2cloud.top/fbagentapi.php"
+CACHE_FILE = "sent_otps.json"
+DEBUG_FILE = "debug_response.json"
 
-# ----------- BOT & DISPATCHER -------------
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-dp = Dispatcher()
-logging.basicConfig(level=logging.INFO)
+# ========== Helper Functions ==========
 
-# ----------- DATABASE -------------
-conn = sqlite3.connect("bot_data.db")
-cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS groups (group_id INTEGER PRIMARY KEY, credit TEXT)")
-cur.execute("CREATE TABLE IF NOT EXISTS bot_status (id INTEGER PRIMARY KEY, status TEXT)")
-cur.execute("INSERT OR IGNORE INTO bot_status (id, status) VALUES (1, 'off')")
-conn.commit()
-
-def set_status(status: str):
-    cur.execute("UPDATE bot_status SET status = ? WHERE id = 1", (status,))
-    conn.commit()
-
-def get_status() -> str:
-    cur.execute("SELECT status FROM bot_status WHERE id = 1")
-    return cur.fetchone()[0]
-
-def add_group(group_id: int):
-    cur.execute("INSERT OR IGNORE INTO groups (group_id, credit) VALUES (?, '𝙎𝙖𝙡𝙚𝙨 𝙎𝙩𝙤𝙧𝙢 🌍')", (group_id,))
-    conn.commit()
-
-def rmv_group(group_id: int):
-    cur.execute("DELETE FROM groups WHERE group_id = ?", (group_id,))
-    conn.commit()
-
-def update_credit(group_id: int, new_credit: str):
-    cur.execute("UPDATE groups SET credit = ? WHERE group_id = ?", (new_credit, group_id))
-    conn.commit()
-
-def get_groups():
-    cur.execute("SELECT group_id FROM groups")
-    return [row[0] for row in cur.fetchall()]
-
-def get_credit(group_id: int) -> str:
-    cur.execute("SELECT credit FROM groups WHERE group_id = ?", (group_id,))
-    r = cur.fetchone()
-    return r[0] if r else "𝙎𝙖𝙡𝙚𝙨 𝙎𝙩𝙤𝙧𝙢 🌍"
-
-# ----------- OTP CACHE -------------
-sent_hashes = set()
-def is_unique(otp: str) -> bool:
-    h = hashlib.sha256(otp.encode()).hexdigest()
-    if h in sent_hashes:
-        return False
-    sent_hashes.add(h)
-    return True
-
-# ----------- BUTTONS -------------
-def otp_buttons():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Main Channel", url="https://t.me/+cbH_C9D9Rog4NWE1")],
-        [InlineKeyboardButton(text="Numbers File", url="https://t.me/+cbH_C9D9Rog4NWE1")]
-    ])
-
-# ----------- OTP FETCH & SEND LOOP -------------
-async def fetch_and_send():
-    while True:
-        if get_status() == "on":
-            try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(API_URL, timeout=10)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        for entry in data:
-                            otp = str(entry.get("otp", "")).strip()
-                            number = entry.get("number", "")
-                            if otp and is_unique(otp):
-                                msg = (
-                                    f"🔥 <b>New OTP Received</b> 🔥\n\n"
-                                    f"📞 <b>Number:</b> <code>{number}</code>\n"
-                                    f"🔑 <b>OTP:</b> <code>{otp}</code>\n"
-                                )
-                                for gid in get_groups():
-                                    credit = get_credit(gid)
-                                    final = msg + f"\n🟢 <i>Powered By {credit}</i>"
-                                    await bot.send_message(chat_id=gid, text=final, reply_markup=otp_buttons())
-            except Exception as e:
-                logging.warning(f"Error fetching OTP: {e}")
-        await asyncio.sleep(5)
-
-# ----------- COMMAND HANDLERS -------------
-@dp.message(F.text.startswith("/on"))
-async def cmd_on(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
-    set_status("on")
-    await msg.answer("✅ Bot is now ON.")
-
-@dp.message(F.text.startswith("/off"))
-async def cmd_off(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
-    set_status("off")
-    await msg.answer("⛔ Bot is now OFF.")
-
-@dp.message(F.text.startswith("/status"))
-async def cmd_status(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
-    await msg.answer(f"ℹ️ Bot status: {get_status().upper()}")
-
-@dp.message(F.text.startswith("/addgroup"))
-async def cmd_addgroup(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
+def send_message(chat_id, text, bot_token):
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
     try:
-        gid = int(msg.text.split()[1])
-        add_group(gid)
-        await msg.answer(f"✅ Added group {gid}.")
-    except:
-        await msg.answer("❌ Usage: /addgroup <group_id>")
+        response = requests.post(url, data=payload)
+        if response.status_code != 200:
+            print(f"Telegram Error: {response.text}")
+    except Exception as e:
+        print(f"Telegram Exception: {e}")
 
-@dp.message(F.text.startswith("/rmvgroup"))
-async def cmd_rmvgroup(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
+def load_cache():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_cache(data):
+    with open(CACHE_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def get_unique_id(time, number, platform, code_id):
+    return hashlib.md5(f"{time}{number}{platform}{code_id}".encode()).hexdigest()
+
+def fetch_data_from_api():
     try:
-        gid = int(msg.text.split()[1])
-        rmv_group(gid)
-        await msg.answer(f"✅ Removed group {gid}.")
-    except:
-        await msg.answer("❌ Usage: /rmvgroup <group_id>")
+        response = requests.get(API_URL, timeout=10)
+        with open(DEBUG_FILE, "w") as f:
+            f.write(response.text)
+        return response.json()
+    except Exception as e:
+        print(f"API Error: {e}")
+        send_message(CHAT_ID, "⚠️ *Error:* Could not fetch data from API.", BOT_TOKEN)
+        return []
 
-@dp.message(F.text.startswith("/cngcredit"))
-async def cmd_cngcredit(msg: Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.answer("⚠️ You are not allowed to use this command.")
-    try:
-        parts = msg.text.split(maxsplit=2)
-        gid = int(parts[1])
-        new_cr = parts[2]
-        update_credit(gid, new_cr)
-        await msg.answer(f"✅ Credit updated for {gid}.")
-    except:
-        await msg.answer("❌ Usage: /cngcredit <group_id> <new_credit>")
+def extract_code(code):
+    match = re.search(r'\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b', code)
+    if match:
+        return match.group(1).replace("-", "")
+    return ""
 
-# ----------- MAIN STARTUP -------------
-async def main():
-    # Start OTP loop
-    asyncio.create_task(fetch_and_send())
+# ========== Main Logic ==========
 
-    # Start polling
-    await dp.start_polling(bot)
+def main():
+    old_data = load_cache()
+    new_entries = []
+    data = fetch_data_from_api()
 
+    if not isinstance(data, list) or not data:
+        send_message(CHAT_ID, "⚠️ *Error:* No valid data found from API.", BOT_TOKEN)
+        return
+
+    for entry in data:
+        time = entry.get("Date", "")
+        number = entry.get("Number", "")
+        platform = entry.get("Platform", "")
+        code = entry.get("OTP", "")
+
+        code_id = extract_code(code)
+        if not code_id:
+            continue
+
+        unique_id = get_unique_id(time, number, platform, code_id)
+
+        if any(old.get("id") == unique_id for old in old_data):
+            continue
+
+        new_entry = {
+            "id": unique_id,
+            "time": time,
+            "number": number,
+            "app": platform,
+            "code": code
+        }
+
+        old_data.append(new_entry)
+        new_entries.append(new_entry)
+
+        message = (
+            "*🔑 New Code Received*\n\n"
+            f"*⏰ Time:* {time}\n"
+            f"*📱 Number:* {number}\n"
+            f"*💬 App:* {platform}\n"
+            f"*🔐 Code:*\n\n{code}\n"
+            "*✅ Stay alert! More codes incoming...*"
+        )
+        send_message(CHAT_ID, message, BOT_TOKEN)
+
+    if new_entries:
+        save_cache(old_data)
+
+    print(f"Done. {len(new_entries)} new entries added.")
+
+# ========== Execute ==========
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
