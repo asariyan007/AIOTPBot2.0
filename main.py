@@ -3,21 +3,24 @@ import hashlib
 import logging
 import sqlite3
 import httpx
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.client.default import DefaultBotProperties
 from aiohttp import web
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.fsm.storage.memory import MemoryStorage
 
 # ----------------- CONFIG -----------------
 BOT_TOKEN = "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78"
 OWNER_ID = 5359578794
 API_URL = "https://techflare.2cloud.top/fbagentapi.php"
 WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
+WEBHOOK_URL = f"https://{os.getenv('RAILWAY_STATIC_URL')}{WEBHOOK_PATH}"
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher(bot)
+dp = Dispatcher(storage=MemoryStorage())
 logging.basicConfig(level=logging.INFO)
 
 # ----------------- DATABASE -----------------
@@ -94,83 +97,82 @@ async def fetch_and_send():
                                 for gid in get_groups():
                                     credit = get_credit(gid)
                                     final = msg + f"🟢 <i>Powered By {credit}</i>"
-                                    await bot.send_message(chat_id=gid, text=final, reply_markup=otp_buttons())
+                                    try:
+                                        await bot.send_message(chat_id=gid, text=final, reply_markup=otp_buttons())
+                                    except Exception as e:
+                                        logging.warning(f"Couldn't send to group {gid}: {e}")
             except Exception as e:
                 logging.warning(f"Error fetching OTP: {e}")
         await asyncio.sleep(5)
 
 # ----------------- COMMANDS -----------------
-@dp.message_handler(commands=["on"])
-async def cmd_on(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    set_status("on")
-    await msg.reply("✅ Bot is now ON.")
+@dp.message()
+async def handle_commands(msg: types.Message):
+    if not msg.text.startswith("/"):
+        return
 
-@dp.message_handler(commands=["off"])
-async def cmd_off(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    set_status("off")
-    await msg.reply("⛔ Bot is now OFF.")
+    user_id = msg.from_user.id
+    command_parts = msg.text.strip().split(maxsplit=2)
+    command = command_parts[0].lower()
 
-@dp.message_handler(commands=["status"])
-async def cmd_status(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    status = get_status()
-    await msg.reply(f"ℹ️ Bot status: {status.upper()}")
+    if user_id != OWNER_ID:
+        await msg.reply("⚠️ You are not allowed to use this command.")
+        return
 
-@dp.message_handler(commands=["addgroup"])
-async def cmd_addgroup(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    try:
-        gid = int(msg.text.split()[1])
-        add_group(gid)
-        await msg.reply(f"✅ Added group {gid}.")
-    except:
-        await msg.reply("❌ Usage: /addgroup <group_id>")
-
-@dp.message_handler(commands=["rmvgroup"])
-async def cmd_rmvgroup(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    try:
-        gid = int(msg.text.split()[1])
-        rmv_group(gid)
-        await msg.reply(f"✅ Removed group {gid}.")
-    except:
-        await msg.reply("❌ Usage: /rmvgroup <group_id>")
-
-@dp.message_handler(commands=["cngcredit"])
-async def cmd_cngcredit(msg: types.Message):
-    if msg.from_user.id != OWNER_ID:
-        return await msg.reply("⚠️ You are not allowed to use this command.")
-    parts = msg.text.split(maxsplit=2)
-    if len(parts) < 3:
-        return await msg.reply("❌ Usage: /cngcredit <group_id> <new_credit>")
-    try:
-        gid = int(parts[1])
-        new_cr = parts[2]
-        update_credit(gid, new_cr)
-        await msg.reply(f"✅ Credit updated for {gid}.")
-    except:
-        await msg.reply("❌ Invalid input.")
+    if command == "/on":
+        set_status("on")
+        await msg.reply("✅ Bot is now ON.")
+    elif command == "/off":
+        set_status("off")
+        await msg.reply("⛔ Bot is now OFF.")
+    elif command == "/status":
+        status = get_status()
+        await msg.reply(f"ℹ️ Bot status: {status.upper()}")
+    elif command == "/addgroup":
+        if len(command_parts) < 2:
+            return await msg.reply("❌ Usage: /addgroup <group_id>")
+        try:
+            gid = int(command_parts[1])
+            add_group(gid)
+            await msg.reply(f"✅ Added group {gid}.")
+        except:
+            await msg.reply("❌ Invalid group ID.")
+    elif command == "/rmvgroup":
+        if len(command_parts) < 2:
+            return await msg.reply("❌ Usage: /rmvgroup <group_id>")
+        try:
+            gid = int(command_parts[1])
+            rmv_group(gid)
+            await msg.reply(f"✅ Removed group {gid}.")
+        except:
+            await msg.reply("❌ Invalid group ID.")
+    elif command == "/cngcredit":
+        if len(command_parts) < 3:
+            return await msg.reply("❌ Usage: /cngcredit <group_id> <new_credit>")
+        try:
+            gid = int(command_parts[1])
+            credit = command_parts[2]
+            update_credit(gid, credit)
+            await msg.reply(f"✅ Credit updated for {gid}.")
+        except:
+            await msg.reply("❌ Invalid input.")
+    else:
+        await msg.reply("⚠️ Unknown command.")
 
 # ----------------- WEBHOOK SETUP -----------------
-async def on_start():
+async def on_startup(app):
     await bot.set_webhook(WEBHOOK_URL)
+    asyncio.create_task(fetch_and_send())
 
-async def on_shutdown():
+async def on_shutdown(app):
     await bot.delete_webhook()
 
 app = web.Application()
 SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
 setup_application(app, dp, bot=bot)
-app.on_startup.append(lambda _: asyncio.create_task(fetch_and_send()))
-app.on_startup.append(lambda _: on_start())
-app.on_shutdown.append(lambda _: on_shutdown())
+
+app.on_startup.append(on_startup)
+app.on_shutdown.append(on_shutdown)
 
 if __name__ == "__main__":
     web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
