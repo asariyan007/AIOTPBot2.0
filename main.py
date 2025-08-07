@@ -4,26 +4,21 @@ import logging
 import sqlite3
 import httpx
 import os
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.client.default import DefaultBotProperties
-from aiohttp import web
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
-# ----------------- CONFIG -----------------
-BOT_TOKEN = "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78"
-OWNER_ID = 5359578794
-API_URL = "https://techflare.2cloud.top/fbagentapi.php"
-WEBHOOK_PATH = f"/bot/{BOT_TOKEN}"
-WEBHOOK_URL = f"https://{os.getenv('RAILWAY_STATIC_URL')}{WEBHOOK_PATH}"
+# ----------- CONFIG -------------
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = int(os.getenv("OWNER_ID"))
+API_URL = os.getenv("API_URLS")  # Only one URL now
 
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher(storage=MemoryStorage())
+# ----------- BOT & DISPATCHER -------------
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-# ----------------- DATABASE -----------------
+# ----------- DATABASE -------------
 conn = sqlite3.connect("bot_data.db")
 cur = conn.cursor()
 cur.execute("CREATE TABLE IF NOT EXISTS groups (group_id INTEGER PRIMARY KEY, credit TEXT)")
@@ -60,7 +55,7 @@ def get_credit(group_id: int) -> str:
     r = cur.fetchone()
     return r[0] if r else "TEAM ELITE X"
 
-# ----------------- OTP CACHE -----------------
+# ----------- OTP CACHE -------------
 sent_hashes = set()
 def is_unique(otp: str) -> bool:
     h = hashlib.sha256(otp.encode()).hexdigest()
@@ -69,14 +64,14 @@ def is_unique(otp: str) -> bool:
     sent_hashes.add(h)
     return True
 
-# ----------------- BUTTONS -----------------
+# ----------- BUTTONS -------------
 def otp_buttons():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Main Channel", url="https://t.me/TEAM_ELITE_X")],
         [InlineKeyboardButton(text="Numbers File", url="https://t.me/TEAM_ELITE_X")]
     ])
 
-# ----------------- OTP FETCH & SEND -----------------
+# ----------- OTP FETCH & SEND LOOP -------------
 async def fetch_and_send():
     while True:
         if get_status() == "on":
@@ -96,83 +91,71 @@ async def fetch_and_send():
                                 )
                                 for gid in get_groups():
                                     credit = get_credit(gid)
-                                    final = msg + f"🟢 <i>Powered By {credit}</i>"
-                                    try:
-                                        await bot.send_message(chat_id=gid, text=final, reply_markup=otp_buttons())
-                                    except Exception as e:
-                                        logging.warning(f"Couldn't send to group {gid}: {e}")
+                                    final = msg + f"\n🟢 <i>Powered By {credit}</i>"
+                                    await bot.send_message(chat_id=gid, text=final, reply_markup=otp_buttons())
             except Exception as e:
                 logging.warning(f"Error fetching OTP: {e}")
         await asyncio.sleep(5)
 
-# ----------------- COMMANDS -----------------
-@dp.message()
-async def handle_commands(msg: types.Message):
-    if not msg.text.startswith("/"):
-        return
+# ----------- COMMAND HANDLERS -------------
+@dp.message(F.text.startswith("/on"))
+async def cmd_on(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    set_status("on")
+    await msg.answer("✅ Bot is now ON.")
 
-    user_id = msg.from_user.id
-    command_parts = msg.text.strip().split(maxsplit=2)
-    command = command_parts[0].lower()
+@dp.message(F.text.startswith("/off"))
+async def cmd_off(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    set_status("off")
+    await msg.answer("⛔ Bot is now OFF.")
 
-    if user_id != OWNER_ID:
-        await msg.reply("⚠️ You are not allowed to use this command.")
-        return
+@dp.message(F.text.startswith("/status"))
+async def cmd_status(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    await msg.answer(f"ℹ️ Bot status: {get_status().upper()}")
 
-    if command == "/on":
-        set_status("on")
-        await msg.reply("✅ Bot is now ON.")
-    elif command == "/off":
-        set_status("off")
-        await msg.reply("⛔ Bot is now OFF.")
-    elif command == "/status":
-        status = get_status()
-        await msg.reply(f"ℹ️ Bot status: {status.upper()}")
-    elif command == "/addgroup":
-        if len(command_parts) < 2:
-            return await msg.reply("❌ Usage: /addgroup <group_id>")
-        try:
-            gid = int(command_parts[1])
-            add_group(gid)
-            await msg.reply(f"✅ Added group {gid}.")
-        except:
-            await msg.reply("❌ Invalid group ID.")
-    elif command == "/rmvgroup":
-        if len(command_parts) < 2:
-            return await msg.reply("❌ Usage: /rmvgroup <group_id>")
-        try:
-            gid = int(command_parts[1])
-            rmv_group(gid)
-            await msg.reply(f"✅ Removed group {gid}.")
-        except:
-            await msg.reply("❌ Invalid group ID.")
-    elif command == "/cngcredit":
-        if len(command_parts) < 3:
-            return await msg.reply("❌ Usage: /cngcredit <group_id> <new_credit>")
-        try:
-            gid = int(command_parts[1])
-            credit = command_parts[2]
-            update_credit(gid, credit)
-            await msg.reply(f"✅ Credit updated for {gid}.")
-        except:
-            await msg.reply("❌ Invalid input.")
-    else:
-        await msg.reply("⚠️ Unknown command.")
+@dp.message(F.text.startswith("/addgroup"))
+async def cmd_addgroup(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    try:
+        gid = int(msg.text.split()[1])
+        add_group(gid)
+        await msg.answer(f"✅ Added group {gid}.")
+    except:
+        await msg.answer("❌ Usage: /addgroup <group_id>")
 
-# ----------------- WEBHOOK SETUP -----------------
-async def on_startup(app):
-    await bot.set_webhook(WEBHOOK_URL)
-    asyncio.create_task(fetch_and_send())
+@dp.message(F.text.startswith("/rmvgroup"))
+async def cmd_rmvgroup(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    try:
+        gid = int(msg.text.split()[1])
+        rmv_group(gid)
+        await msg.answer(f"✅ Removed group {gid}.")
+    except:
+        await msg.answer("❌ Usage: /rmvgroup <group_id>")
 
-async def on_shutdown(app):
-    await bot.delete_webhook()
+@dp.message(F.text.startswith("/cngcredit"))
+async def cmd_cngcredit(msg: Message):
+    if msg.from_user.id != OWNER_ID:
+        return await msg.answer("⚠️ You are not allowed to use this command.")
+    try:
+        parts = msg.text.split(maxsplit=2)
+        gid = int(parts[1])
+        new_cr = parts[2]
+        update_credit(gid, new_cr)
+        await msg.answer(f"✅ Credit updated for {gid}.")
+    except:
+        await msg.answer("❌ Usage: /cngcredit <group_id> <new_credit>")
 
-app = web.Application()
-SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-setup_application(app, dp, bot=bot)
-
-app.on_startup.append(on_startup)
-app.on_shutdown.append(on_shutdown)
+# ----------- MAIN STARTUP -------------
+async def main():
+    await dp.start_polling(bot, on_startup=fetch_and_send)
 
 if __name__ == "__main__":
-    web.run_app(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    asyncio.run(main())
