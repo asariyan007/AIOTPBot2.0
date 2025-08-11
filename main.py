@@ -82,7 +82,7 @@ def main():
             time_str = entry.get("Date", "")
             number = entry.get("Number", "")
             app = entry.get("Platform", "")
-            code = entry.get("OTP", "")
+            code = str(entry.get("OTP", ""))  # Convert OTP to string
 
             # Extract only numbers from OTP
             import re
