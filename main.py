@@ -71,12 +71,12 @@ def format_message(entry):
     code_only = match.group(1).replace("-", "") if match else code_full
 
     return (
-        "🔑 *New Code Received*\n\n"  # 🔑 এর পরে ফাঁকা লাইন
-        f"⏰ *Time:* `{time_str}`"
-        f"📱 *Number:* `{number}`"
-        f"💬 *App:* *{app}*"
+        "🔑 *New Code Received*\n\n"
+        f"⏰ *Time:* {time_str}\n"
+        f"📱 *Number:* `{number}`\n"
+        f"💬 *App:* *{app}*\n"
         f"🔐 *Code:* `{code_only}`\n\n"
-        f"📩 *Full Message:*\n"
+        "📩 *Full Message:*\n"
         f"```{code_full}```\n\n"
         "✅ *Stay alert! More codes incoming...*"
     )
