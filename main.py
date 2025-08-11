@@ -71,14 +71,14 @@ def format_message(entry):
     code_only = match.group(1).replace("-", "") if match else code_full
 
     return (
-        "🔑 *New Code Received*\n\n"
+        "🔑 *New Code Received*\n"
         f"⏰ *Time:* `{time_str}`\n"
         f"📱 *Number:* `{number}`\n"
         f"💬 *App:* *{app}*\n"
         f"🔐 *Code:* `{code_only}`\n\n"
         f"📩 *Full Message:*\n"
-        f"```{code_full}```\n\n"
-        "✅ *Stay alert! More codes incoming...*"
+        f"💬 ```\n{code_full}\n```"
+        "\n✅ *Stay alert! More codes incoming...*"
     )
 def main():
     cache = load_cache()
