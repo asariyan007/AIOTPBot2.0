@@ -8,7 +8,7 @@ from time import sleep
 
 # ========== Configuration ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78")
-CHAT_ID = os.getenv("CHAT_ID", "-1002616614576")
+CHAT_ID = os.getenv("CHAT_ID", "-1002506220348")
 API_URL = "https://techflare.2cloud.top/fbagentapi.php"
 CACHE_FILE = "sent_otps.json"
 DEBUG_FILE = "debug_response.json"
