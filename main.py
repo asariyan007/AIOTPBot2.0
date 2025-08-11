@@ -55,7 +55,6 @@ def fetch_api():
         return []
 
 def format_message(entry):
-    """Format message like the given image"""
     from datetime import datetime
     import re
 
@@ -76,7 +75,7 @@ def format_message(entry):
         f"⏰ *Time:* `{time_str}`\n"
         f"📱 *Number:* `{number}`\n"
         f"💬 *App:* *{app}*\n"
-        f"🔐 *Code:* `{code_only}`\n"
+        f"🔐 *Code:* `{code_only}`\n\n"
         f"📩 *Full Message:*\n"
         f"> {code_full}\n\n"
         "✅ *Stay alert! More codes incoming...*"
