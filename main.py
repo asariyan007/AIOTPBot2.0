@@ -77,7 +77,7 @@ def format_message(entry):
         f"💬 *App:* *{app}*\n"
         f"🔐 *Code:* `{code_only}`\n\n"
         f"📩 *Full Message:*\n"
-        f"> {code_full}\n\n"
+        f"```{code_full}```\n\n"
         "✅ *Stay alert! More codes incoming...*"
     )
 def main():
