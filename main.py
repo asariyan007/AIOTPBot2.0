@@ -59,17 +59,21 @@ def format_message(entry):
     time_str = entry.get("Date", "")
     number = entry.get("Number", "")
     app = entry.get("Platform", "")
-    code = entry.get("OTP", "")
+    code_full = str(entry.get("OTP", ""))
+
+    import re
+    match = re.search(r"\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b", code_full)
+    code_only = match.group(1).replace("-", "") if match else code_full
 
     return (
         "🔑 *New Code Received*\n\n"
         f"⏰ *Time:* `{time_str}`\n"
         f"📱 *Number:* `{number}`\n"
         f"💬 *App:* *{app}*\n"
-        f"🔐 *Code:* `{code}`\n\n"
+        f"🔐 *Code:* `{code_only}`\n\n"
+        f"📩 *Full message:*\n```{code_full}```\n\n"
         "✅ *Stay alert! More codes incoming...*"
     )
-
 def main():
     cache = load_cache()
     print("[Bot Started] Waiting for new OTP codes...")
