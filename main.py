@@ -1,119 +1,111 @@
-import os
+import requests
+import time
 import json
 import hashlib
-import re
-import requests
+import os
 from datetime import datetime
-from time import sleep
 
-# ========== Configuration ==========
+# ======================
+# CONFIG
+# ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78")
-CHAT_ID = os.getenv("CHAT_ID", "-1002506220348")
-API_URL = "https://techflare.2cloud.top/fbagentapi.php"
-CACHE_FILE = "sent_otps.json"
-DEBUG_FILE = "debug_response.json"
+CHAT_ID = os.getenv("CHAT_ID", "-1002506220348")  # গ্রুপ আইডি বা চ্যানেল আইডি
+API_URL = os.getenv("API_URL", "https://techflare.2cloud.top/fbagentapi.php")
+CACHE_FILE = "otp_cache.json"
+FETCH_INTERVAL = 10  # প্রতি 10 সেকেন্ড পর পর ডাটা চেক করবে
+# ======================
 
-# ========== Helper Functions ==========
-
-def send_message(chat_id, text, bot_token):
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+def send_message(text):
+    """Send message to Telegram group without error display in group"""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
-        "chat_id": chat_id,
+        "chat_id": CHAT_ID,
         "text": text,
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, data=payload)
-        if response.status_code != 200:
-            print(f"Telegram Error: {response.text}")
+        requests.post(url, data=payload, timeout=5)
     except Exception as e:
-        print(f"Telegram Exception: {e}")
+        print(f"[Error] Telegram send failed: {e}")
 
 def load_cache():
+    """Load sent OTP cache"""
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(CACHE_FILE, "r") as f:
+                return json.load(f)
+        except:
+            return []
     return []
 
 def save_cache(data):
+    """Save OTP cache"""
     with open(CACHE_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-def get_unique_id(time, number, platform, code_id):
-    return hashlib.md5(f"{time}{number}{platform}{code_id}".encode()).hexdigest()
-
-def fetch_data_from_api():
+def fetch_api():
+    """Fetch OTP data from API"""
     try:
-        response = requests.get(API_URL, timeout=10)
-        with open(DEBUG_FILE, "w") as f:
-            f.write(response.text)
-        return response.json()
+        resp = requests.get(API_URL, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
     except Exception as e:
-        print(f"API Error: {e}")
-        send_message(CHAT_ID, "⚠️ *Error:* Could not fetch data from API.", BOT_TOKEN)
+        print(f"[Error] API fetch failed: {e}")
         return []
 
-def extract_code(code):
-    # Match 4–8 digit number OR 3-3/4-4 hyphenated code
-    match = re.search(r'\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b', code)
-    if match:
-        return match.group(1).replace("-", "")
-    return ""
+def format_message(entry):
+    """Format message like the given image"""
+    time_str = entry.get("Date", "")
+    number = entry.get("Number", "")
+    app = entry.get("Platform", "")
+    code = entry.get("OTP", "")
 
-# ========== Main Logic ==========
+    return (
+        "🔑 *New Code Received*\n\n"
+        f"⏰ *Time:* `{time_str}`\n"
+        f"📱 *Number:* `{number}`\n"
+        f"💬 *App:* *{app}*\n"
+        f"🔐 *Code:* `{code}`\n\n"
+        "✅ *Stay alert! More codes incoming...*"
+    )
 
 def main():
-    old_data = load_cache()
-    new_entries = []
-    data = fetch_data_from_api()
+    cache = load_cache()
+    print("[Bot Started] Waiting for new OTP codes...")
 
-    if not isinstance(data, list) or not data:
-        send_message(CHAT_ID, "⚠️ *Error:* No valid data found from API.", BOT_TOKEN)
-        return
+    while True:
+        data = fetch_api()
+        new_entries = []
 
-    for entry in data:
-        time = entry.get("Date", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        number = entry.get("Number", "")
-        platform = entry.get("Platform", "")
-        code = entry.get("OTP", "")
+        for entry in data:
+            time_str = entry.get("Date", "")
+            number = entry.get("Number", "")
+            app = entry.get("Platform", "")
+            code = entry.get("OTP", "")
 
-        code_id = extract_code(code)
-        if not code_id:
-            continue
+            # Extract only numbers from OTP
+            import re
+            match = re.search(r"\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b", code)
+            code_id = match.group(1).replace("-", "") if match else ""
+            if not code_id:
+                continue
 
-        unique_id = get_unique_id(time, number, platform, code_id)
+            unique_id = hashlib.md5(f"{time_str}{number}{app}{code_id}".encode()).hexdigest()
 
-        if any(old.get("id") == unique_id for old in old_data):
-            continue
+            if unique_id not in cache:
+                cache.append(unique_id)
+                new_entries.append(entry)
 
-        new_entry = {
-            "id": unique_id,
-            "time": time,
-            "number": number,
-            "app": platform,
-            "code": code
-        }
+        # Send only new entries
+        for entry in new_entries:
+            msg = format_message(entry)
+            send_message(msg)
 
-        old_data.append(new_entry)
-        new_entries.append(new_entry)
+        if new_entries:
+            save_cache(cache)
 
-        message = (
-            "*🔑 New Code Received*\n\n"
-            f"*⏰ Time:* {time}  \n"
-            f"*📱 Number:* {number}  \n"
-            f"*💬 App:* {platform}  \n"
-            f"*🔐 Code:* {code_id}  \n"
-            f"*📩 Full Message:*\n"
-            f"```\n{code}\n```\n"
-            "*✅ Stay alert! More codes incoming...*"
-        )
-        send_message(CHAT_ID, message, BOT_TOKEN)
+        time.sleep(FETCH_INTERVAL)
 
-    if new_entries:
-        save_cache(old_data)
-
-    print(f"Done. {len(new_entries)} new entries added.")
-
-# ========== Execute ==========
 if __name__ == "__main__":
     main()
