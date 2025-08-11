@@ -56,12 +56,19 @@ def fetch_api():
 
 def format_message(entry):
     """Format message like the given image"""
+    from datetime import datetime
+    import re
+
     time_str = entry.get("Date", "")
+    if not time_str:
+        # যদি API-তে Date না থাকে, তাহলে এখনকার সময় দেখাবে
+        time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     number = entry.get("Number", "")
     app = entry.get("Platform", "")
     code_full = str(entry.get("OTP", ""))
 
-    import re
+    # Extract only the OTP code
     match = re.search(r"\b(\d{4,8}|\d{3}-\d{3}|\d{2,4}-\d{2,4})\b", code_full)
     code_only = match.group(1).replace("-", "") if match else code_full
 
