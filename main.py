@@ -9,7 +9,7 @@ from datetime import datetime
 # CONFIG
 # ======================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8496694021:AAGyZFZoHM9PqCgYo70df4gVAZku8C_bF78")
-CHAT_ID = os.getenv("CHAT_ID", "-1002506220348")  # গ্রুপ আইডি বা চ্যানেল আইডি
+CHAT_ID = os.getenv("CHAT_ID", "-1002616614576")  # গ্রুপ আইডি বা চ্যানেল আইডি
 API_URL = os.getenv("API_URL", "https://techflare.2cloud.top/fbagentapi.php")
 CACHE_FILE = "otp_cache.json"
 FETCH_INTERVAL = 10  # প্রতি 10 সেকেন্ড পর পর ডাটা চেক করবে
@@ -61,7 +61,6 @@ def format_message(entry):
 
     time_str = entry.get("Date", "")
     if not time_str:
-        # যদি API-তে Date না থাকে, তাহলে এখনকার সময় দেখাবে
         time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     number = entry.get("Number", "")
@@ -77,8 +76,9 @@ def format_message(entry):
         f"⏰ *Time:* `{time_str}`\n"
         f"📱 *Number:* `{number}`\n"
         f"💬 *App:* *{app}*\n"
-        f"🔐 *Code:* `{code_only}`\n\n"
-        f"📩 *Full message:*\n```{code_full}```\n\n"
+        f"🔐 *Code:* `{code_only}`\n"
+        f"📩 *Full Message:*\n"
+        f"> {code_full}\n\n"
         "✅ *Stay alert! More codes incoming...*"
     )
 def main():
